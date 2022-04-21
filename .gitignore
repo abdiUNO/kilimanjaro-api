@@ -1,0 +1,28 @@
+# Logs
+
+# Config
+.env
+env_variables.yaml
+
+# Misc
+.idea
+.DS_Store
+
+vendor/
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env
+
+.idea

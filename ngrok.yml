@@ -1,0 +1,5 @@
+http_proxy: "http://localhost:8888"
+tunnels:
+  simuly-server:
+    proto: http
+    addr: 127.0.0.1:8080
