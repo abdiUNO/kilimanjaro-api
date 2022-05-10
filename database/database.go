@@ -2,10 +2,8 @@ package database
 
 import (
 	"fmt"
-	"kilimanjaro-api/api/products"
+	"kilimanjaro-api/database/models"
 	"kilimanjaro-api/database/orm"
-
-	"kilimanjaro-api/api/auth"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -35,7 +33,7 @@ func InitDatabase() {
 	orm.DBCon.Set("database:table_options", "ENGINE=InnoDB")
 	orm.DBCon.Set("database:table_options", "collation_connection=utf8_general_ci")
 
-	orm.DBCon.Debug().AutoMigrate(&auth.User{}, &products.Product{}, &products.Vendor{})
+	orm.DBCon.Debug().AutoMigrate(&models.User{}, &models.Product{}, &models.Vendor{})
 	orm.DBCon.LogMode(false)
 
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"kilimanjaro-api/server/middleware"
 	"net"
 	"net/http"
 
@@ -25,7 +26,7 @@ func NewServer(prefix string) (*Server, error) {
 	database.InitDatabase()
 	//utils.InitialMigration()
 
-	//router.Use(middleware.JwtAuthentication)
+	router.Use(middleware.JwtAuthentication)
 
 	s := &Server{
 		router: router,

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
+	"kilimanjaro-api/database/models"
 	u "kilimanjaro-api/utils"
 	"kilimanjaro-api/utils/response"
 	"net/http"
@@ -11,7 +13,7 @@ import (
 
 var CreateUser = func(w http.ResponseWriter, r *http.Request) {
 
-	user := &User{}
+	user := &models.User{}
 	err := json.NewDecoder(r.Body).Decode(user) //decode the request body into struct and failed if any error occur
 	if err != nil {
 		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", err))
@@ -35,18 +37,50 @@ var CreateUser = func(w http.ResponseWriter, r *http.Request) {
 
 }
 
+//find user by email
+//   if user found, return user
+//create user if user not found
+//   if user created, return user and token
+
 var Authenticate = func(w http.ResponseWriter, r *http.Request) {
-	user := &User{}
+	user := &models.User{}
 	//decode the request body into struct and failed if any error occur
 	if err := json.NewDecoder(r.Body).Decode(user); err != nil {
+		log.Debug(err.Error())
 		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", err))
 		return
 	}
 
-	data, err := Login(user.Email, user.Password)
+	data, err := models.Login(user.Email)
 	if err != nil {
-		response.HandleError(w, err)
-		return
+		fmt.Println("User not found")
+		if data.Email == "" {
+			data, err = user.Create()
+			if err != nil {
+				response.HandleError(w, u.NewError(u.EINTERNAL, "Internal server err", err))
+				return
+			}
+		} else {
+			response.HandleError(w, err)
+			return
+		}
+	}
+
+	if data != nil {
+		log.Println(data.Email)
+		code, err := CreateCode(data)
+		log.Println(code)
+		if err != nil {
+			response.HandleError(w, u.NewError(u.EINTERNAL, "could not create code", err))
+			return
+		}
+
+		err = EmailCode(r.Context(), code, data)
+		if err != nil {
+			fmt.Println(err.Error())
+			response.HandleError(w, u.NewError(u.EINTERNAL, "could not send otp email", err))
+			return
+		}
 	}
 
 	response.Json(w, map[string]interface{}{
@@ -58,14 +92,14 @@ var Authenticate = func(w http.ResponseWriter, r *http.Request) {
 var UpdateUser = func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	userId := params["id"]
-	user := &User{}
+	user := &models.User{}
 	//decode the request body into struct and failed if any error occur
 	if err := json.NewDecoder(r.Body).Decode(user); err != nil {
 		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", err))
 		return
 	}
 
-	user, err := Update(userId, user)
+	user, err := models.Update(userId, user)
 	if err != nil {
 		response.HandleError(w, err)
 		return
@@ -83,12 +117,17 @@ type ChangePasswordBody struct {
 }
 
 var ChangePassword = func(w http.ResponseWriter, r *http.Request) {
-	token := r.Context().Value("token").(*Token)
-	user := GetUser(token.UserId)
+	token := r.Context().Value("token").(*models.Token)
+	user, err := models.FindUserById(token.UserId)
+
+	if err != nil {
+		response.HandleError(w, u.NewError(u.ENOTFOUND, "could not find user", err))
+		return
+	}
 
 	jsonBody := &ChangePasswordBody{}
 	//decode the request body into struct and failed if any error occur
-	if err := json.NewDecoder(r.Body).Decode(jsonBody); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(jsonBody); err != nil {
 		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", err))
 		return
 	}
@@ -107,10 +146,10 @@ var ChangePassword = func(w http.ResponseWriter, r *http.Request) {
 }
 
 var FindUsers = func(w http.ResponseWriter, r *http.Request) {
-	token := r.Context().Value("token").(*Token)
+	token := r.Context().Value("token").(*models.Token)
 	query := r.FormValue("query")
 
-	users, err := QueryUsers(token.UserId, query)
+	users, err := models.QueryUsers(token.UserId, query)
 	if err != nil {
 		response.HandleError(w, err)
 		return
@@ -125,7 +164,7 @@ var FindUsers = func(w http.ResponseWriter, r *http.Request) {
 var GenerateOTP = func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	userId := params["id"]
-	user, dbErr := FindUserById(userId)
+	user, dbErr := models.FindUserById(userId)
 
 	if dbErr != nil {
 		response.HandleError(w, u.NewError(u.ENOTFOUND, "could not find user", dbErr))
@@ -150,11 +189,27 @@ var GenerateOTP = func(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type ValidateRequest struct {
+	Code   string `json:",code"`
+	UserID string `json:",userId"`
+}
+
 var ValidateOTP = func(w http.ResponseWriter, r *http.Request) {
-	passcode := r.FormValue("code")
-	params := mux.Vars(r)
-	userId := params["id"]
-	user, dbErr := FindUserById(userId)
+	formData := &ValidateRequest{}
+	if err := json.NewDecoder(r.Body).Decode(formData); err != nil {
+		log.Debug(err.Error())
+		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", err))
+		return
+	}
+
+	passcode := formData.Code
+	userId := formData.UserID
+
+	log.Println(userId)
+
+	user, dbErr := models.FindUserById(userId)
+
+	log.Println(user.Email)
 
 	if dbErr != nil {
 		response.HandleError(w, u.NewError(u.ENOTFOUND, "could not find user", dbErr))
@@ -169,16 +224,22 @@ var ValidateOTP = func(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isValid == true {
-		user.EmailVerified = true
-		dbErr := GetDB().Save(&user).Error
 
-		if dbErr != nil {
-			response.HandleError(w, u.NewError(u.EINTERNAL, "could not update user", nil))
-			return
+		user.JwtToken = models.GenerateJwtToken(user)
+
+		if user.EmailVerified == false {
+			user.EmailVerified = true
+			dbErr := models.GetDB().Save(&user).Error
+
+			if dbErr != nil {
+				response.HandleError(w, u.NewError(u.EINTERNAL, "could not update user", nil))
+				return
+			}
 		}
 	}
 
 	response.Json(w, map[string]interface{}{
 		"isValid": isValid,
+		"user":    user,
 	})
 }

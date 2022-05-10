@@ -2,7 +2,8 @@ package server
 
 import (
 	"encoding/json"
-	"kilimanjaro-api/api/products"
+	"kilimanjaro-api/api/product"
+	vendor "kilimanjaro-api/api/seller"
 	"net/http"
 
 	"kilimanjaro-api/api/auth"
@@ -18,14 +19,22 @@ func (s *Server) SetupRoutes() {
 	s.router.HandleFunc("/users/login", auth.Authenticate).Methods("POST")
 	s.router.HandleFunc("/users", auth.FindUsers).Queries("query", "{query}").Methods("GET")
 	s.router.HandleFunc("/users/{id}", auth.UpdateUser).Methods("PATCH")
-	s.router.HandleFunc("/users/{id}/change-password", auth.ChangePassword).Methods("PATCH")
+
+	s.router.HandleFunc("/users/{id}/otp-code", auth.GenerateOTP).Methods("GET")
+	s.router.HandleFunc("/users/otp-code", auth.ValidateOTP).Methods("POST")
+
+	//s.router.HandleFunc("/users/{id}/change-password", auth.ChangePassword).Methods("PATCH")
 
 	//s.router.HandleFunc("/top_products", products.GetTopProducts).Methods("GET")
 
-	s.router.HandleFunc("/products/all", products.GetAllProducts).Methods("GET")
-	s.router.HandleFunc("/products/search", products.SearchProducts).Queries("q", "{q}").Methods("GET")
-	s.router.HandleFunc("/products/{id}", products.GetProduct).Methods("GET")
+	s.router.HandleFunc("/vendors", vendor.GetAllVendors).Methods("GET")
+	s.router.HandleFunc("/vendors/{id}", vendor.GetVendor).Methods("GET")
+	s.router.HandleFunc("/vendors", vendor.CreateVendor).Methods("POST")
 
+	s.router.HandleFunc("/products", product.GetAllProducts).Methods("GET")
+	s.router.HandleFunc("/products/search", product.SearchProducts).Queries("q", "{q}").Methods("GET")
+	s.router.HandleFunc("/products/{id}", product.GetProduct).Methods("GET")
+	s.router.HandleFunc("/products", product.CreateProduct).Methods("POST")
 	//s.router.HandleFunc("/users/{id}/otp-code", auth.GenerateOTP).Methods("GET")
 	//s.router.HandleFunc("/users/{id}/otp-code", auth.ValidateOTP).Queries("code", "{code}").Methods("POST")
 	//

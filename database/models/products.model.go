@@ -1,4 +1,4 @@
-package products
+package models
 
 import (
 	"github.com/jinzhu/gorm"
@@ -15,29 +15,31 @@ import (
 //	DB:       0,  // use default DB
 //})
 
-func GetDB() *gorm.DB {
-	return orm.DBCon
-}
-
 type Product struct {
 	orm.GormModel
 	Title       string          `json:"title"`
-	Description string          `sql:"type:longtext"`
+	Description string          `sql:"type:longtext" json:"description"`
 	Category    string          `json:"category"`
 	Price       decimal.Decimal `json:"price" gorm:"type:numeric"`
-	Image       string          `json:"Image"`
-	Vendor      Vendor          `json:"vendor"`
-	VendorID    string          `json:"-"`
+	Image       string          `json:"image"`
+	Vendor      *Vendor         `json:"vendor"`
+	VendorID    string          `json:"vendorId"`
 }
 
-func (product *Product) Create() error {
+func (product *Product) Create() (*Product, *utils.Error) {
 	err := GetDB().Create(&product).Error
-	return err
+
+	if err != nil {
+		log.Println("RRRR")
+		return &Product{}, utils.NewError(utils.EINTERNAL, "internal database error", err)
+	}
+
+	return product, nil
 }
 
 func FindProductById(productId string) (*Product, *utils.Error) {
 	product := &Product{}
-	err := GetDB().First(&product, productId).Error
+	err := GetDB().First(&product, "id = ?", productId).Error
 
 	if err != nil {
 		log.Println(err)

@@ -25,7 +25,9 @@ type Config struct {
 	RedisPort string `env:"REDIS_PORT" envDefault:"6379"`
 	RedisPass string `env:"REDIS_PASS" envDefault:""`
 
-	JWTSecret     string `env:"JWT_SECRET" envDefault:"qBPXnbcuQyauqlhTpJQjgAnmauKiZUgrhdu7eQhuNXfr6"`
+	JWTSecret string `env:"JWT_SECRET" envDefault:"qBPXnbcuQyauqlhTpJQjgAnmauKiZUgrhdu7eQhuNXfr6"`
+
+	MailGunDomain string `env:"MAILGUN_DOMAIN" envDefault:"sandbox11fff8f2af224f05a97e16f6a66f64b1.mailgun.org"`
 	MailGunApiKey string `env:"MAILGUN_API_KEY" envDefault:""`
 }
 

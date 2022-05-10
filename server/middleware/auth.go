@@ -3,13 +3,12 @@ package middleware
 import (
 	"context"
 	"github.com/golang-jwt/jwt"
+	"kilimanjaro-api/database/models"
 	"net/http"
 	"strings"
 
 	"kilimanjaro-api/utils"
 	"kilimanjaro-api/utils/response"
-
-	"kilimanjaro-api/api/auth"
 
 	"kilimanjaro-api/config"
 )
@@ -26,8 +25,8 @@ var JwtAuthentication = func(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		notAuth := []string{"/api/health", "/api/users/new", "/api/users/login"} //List of endpoints that doesn't require auth
-		requestPath := r.URL.Path                                                //current request path
+		notAuth := []string{"/api/health", "/api/users/new", "/api/users/login", "/api/users/otp-code"} //List of endpoints that doesn't require auth
+		requestPath := r.URL.Path                                                                       //current request path
 
 		//check if request does not need authentication, serve the request if it doesn't need it
 		for _, value := range notAuth {
@@ -52,7 +51,7 @@ var JwtAuthentication = func(next http.Handler) http.Handler {
 		}
 
 		tokenPart := splitted[1] //Grab the token part, what we are truly interested in
-		tk := &auth.Token{}
+		tk := &models.Token{}
 
 		token, err := jwt.ParseWithClaims(tokenPart, tk, func(token *jwt.Token) (interface{}, error) {
 			return []byte(cfg.JWTSecret), nil

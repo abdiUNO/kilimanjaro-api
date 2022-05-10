@@ -2,24 +2,31 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"github.com/mailgun/mailgun-go/v4"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"kilimanjaro-api/config"
+	"kilimanjaro-api/database/models"
 	"kilimanjaro-api/utils"
 	"time"
 )
 
-func KeyFromUser(user *User) (*otp.Key, error) {
+func KeyFromUser(user *models.User) (*otp.Key, error) {
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "featherrapp.com",
+		Issuer:      "thekilimanjaroapp.com",
 		AccountName: user.Email,
-		Secret:      []byte(user.Password),
 	})
 
 	return key, err
 }
 
-func CreateCode(user *User) (string, error) {
-	key, err := KeyFromUser(user)
+func CreateCode(user *models.User) (string, error) {
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "thekilimanjaroapp.com",
+		AccountName: user.Email,
+	})
+
 	if err != nil {
 		return "", utils.NewError(utils.ECONFLICT, "could not create otp key", nil)
 	}
@@ -35,16 +42,17 @@ func CreateCode(user *User) (string, error) {
 		return "", utils.NewError(utils.ECONFLICT, "could not create otp code", nil)
 	}
 
+	user.Secret = key.Secret()
+	if dbErr := models.GetDB().Save(&user).Error; dbErr != nil {
+		return "", utils.NewError(utils.ECONFLICT, "could not save user", nil)
+	}
+
 	return code, nil
 }
 
-func ValidateCode(passcode string, user *User) (bool, error) {
-	key, err := KeyFromUser(user)
-	if err != nil {
-		return false, utils.NewError(utils.ECONFLICT, "could not create otp key", nil)
-	}
+func ValidateCode(passcode string, user *models.User) (bool, error) {
 
-	valid, validErr := totp.ValidateCustom(passcode, key.Secret(), time.Now(), totp.ValidateOpts{
+	valid, validErr := totp.ValidateCustom(passcode, user.Secret, time.Now(), totp.ValidateOpts{
 		Period:    660,
 		Skew:      1,
 		Digits:    otp.DigitsSix,
@@ -54,30 +62,30 @@ func ValidateCode(passcode string, user *User) (bool, error) {
 	return valid, validErr
 }
 
-func EmailCode(ctx context.Context, passcode string, user *User) error {
-	//cfg := config.GetConfig()
+func EmailCode(ctx context.Context, passcode string, user *models.User) error {
+	cfg := config.GetConfig()
 
-	//mg := mailgun.NewMailgun("mg.featherrapp.com", cfg.MailGunApiKey)
-	//
-	//sender := "Featherr App <noreply@mg.featherrapp.com>"
-	//subject := "Verification code!"
-	//recipient := user.Email
-	//template := "otp-email"
-	//// The message object allows you to add attachments and Bcc recipients
-	//message := mg.NewMessage(sender, subject, "", recipient)
-	//message.SetTemplate(template)
-	//
-	//message.AddVariable("passcode", passcode)
-	//message.AddVariable("username", user.FullName)
-	//
-	//msg, id, err := mg.Send(ctx, message)
-	//
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//fmt.Println(msg)
-	//fmt.Println(id)
+	mg := mailgun.NewMailgun(cfg.MailGunDomain, cfg.MailGunApiKey)
+
+	sender := "Kilimanjaro App<noreply@sandbox11fff8f2af224f05a97e16f6a66f64b1.mailgun.org>"
+	subject := " Sign In Code!"
+	recipient := user.Email
+	template := "otp-email"
+	// The message object allows you to add attachments and Bcc recipients
+	message := mg.NewMessage(sender, subject, "", recipient)
+	message.SetTemplate(template)
+
+	message.AddVariable("passcode", passcode)
+	//message.AddVariable("username", user.Name)
+
+	msg, id, err := mg.Send(ctx, message)
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(msg)
+	fmt.Println(id)
 
 	return nil
 }
