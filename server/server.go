@@ -19,9 +19,13 @@ type Server struct {
 }
 
 func NewServer(prefix string) (*Server, error) {
+	cfg := config.GetConfig()
+
 	mainRouter := mux.NewRouter()
 	router := mainRouter.PathPrefix(prefix).Subrouter()
-	router.Use(Logger)
+	if cfg.AppDebug == "true" {
+		router.Use(Logger)
+	}
 
 	database.InitDatabase()
 	//utils.InitialMigration()
