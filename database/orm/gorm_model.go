@@ -9,9 +9,9 @@ import (
 
 type GormModel struct {
 	ID        string     `database:"primary_key;type:varchar(255);" json:"id"`
-	CreatedAt time.Time  `json:"-"`
+	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"-"`
-	DeletedAt *time.Time `sql:"index"`
+	DeletedAt *time.Time `sql:"index" `
 }
 
 func (model *GormModel) BeforeCreate(scope *gorm.Scope) error {

@@ -2,11 +2,11 @@ package server
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"kilimanjaro-api/database"
 	"kilimanjaro-api/server/middleware"
 	"net"
 	"net/http"
-
-	"kilimanjaro-api/database"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -23,14 +23,19 @@ func NewServer(prefix string) (*Server, error) {
 
 	mainRouter := mux.NewRouter()
 	router := mainRouter.PathPrefix(prefix).Subrouter()
+	router.Use(middleware.JwtAuthentication)
 	if cfg.AppDebug == "true" {
-		router.Use(Logger)
+		router.Use(middleware.NewLogger(middleware.LogOptions{
+			Formatter: &logrus.TextFormatter{
+				DisableTimestamp: true,
+				ForceColors:      true,
+			},
+			EnableStarting: true,
+		}).Logger)
 	}
 
 	database.InitDatabase()
 	//utils.InitialMigration()
-
-	router.Use(middleware.JwtAuthentication)
 
 	s := &Server{
 		router: router,

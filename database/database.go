@@ -33,7 +33,7 @@ func InitDatabase() {
 	orm.DBCon.Set("database:table_options", "ENGINE=InnoDB")
 	orm.DBCon.Set("database:table_options", "collation_connection=utf8_general_ci")
 
-	orm.DBCon.Debug().AutoMigrate(&models.User{}, &models.Product{}, &models.Vendor{})
+	orm.DBCon.Debug().AutoMigrate(&models.User{}, &models.Product{}, &models.Category{})
 	orm.DBCon.LogMode(false)
 
 }

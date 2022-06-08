@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"kilimanjaro-api/api/category"
 	"kilimanjaro-api/api/product"
 	vendor "kilimanjaro-api/api/seller"
 	"net/http"
@@ -22,8 +23,11 @@ func (s *Server) SetupRoutes() {
 
 	s.router.HandleFunc("/users/{id}/otp-code", auth.GenerateOTP).Methods("GET")
 	s.router.HandleFunc("/users/otp-code", auth.ValidateOTP).Methods("POST")
+	s.router.HandleFunc("/users/{id}/products", auth.GetVendorProducts).Methods("GET")
 
-	//s.router.HandleFunc("/users/{id}/change-password", auth.ChangePassword).Methods("PATCH")
+	s.router.HandleFunc("/category", category.GetAllCategories).Methods("GET")
+	s.router.HandleFunc("/category", category.CreateCategory).Methods("POST")
+	s.router.HandleFunc("/category/{id}", category.GetCategory).Methods("GET")
 
 	//s.router.HandleFunc("/top_products", products.GetTopProducts).Methods("GET")
 

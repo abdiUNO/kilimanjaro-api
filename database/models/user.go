@@ -1,14 +1,14 @@
 package models
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"github.com/jinzhu/gorm"
-	"golang.org/x/crypto/bcrypt"
+	log "github.com/sirupsen/logrus"
 	"kilimanjaro-api/config"
 	"kilimanjaro-api/database/orm"
 	"kilimanjaro-api/utils"
-	"log"
 	"strings"
 )
 
@@ -16,26 +16,46 @@ import (
 JWT claims struct
 */
 
+var cfg = config.GetConfig()
+
 type Token struct {
 	UserId string
 	jwt.StandardClaims
 }
 
-var cfg = config.GetConfig()
+type UserType string
+
+const (
+	BUYER  UserType = "buyer"
+	SELLER UserType = "seller"
+)
+
+func (ut *UserType) Scan(value interface{}) error {
+	*ut = UserType(value.([]byte))
+	return nil
+}
+
+func (ut UserType) Value() (driver.Value, error) {
+	if len(ut) == 0 {
+		return nil, nil
+	}
+	return string(ut), nil
+}
 
 type User struct {
 	orm.GormModel
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	Email         string `json:"email"`
-	Phone         string `json:"phone"`
-	Password      string `json:"-"`
-	Location      string `json:"location"`
-	Website       string `json:"website"`
-	JwtToken      string `sql:"-" json:"jwtToken"`
-	EmailVerified bool   `sql:"not null;DEFAULT:false" json:"emailVerified"`
-	Secret        string `json:"-"`
-	Vendor        Vendor `json:"-"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	Email         string    `json:"email"`
+	Image         string    `json:"image"`
+	Phone         string    `json:"phone"`
+	Location      string    `json:"location"`
+	Website       string    `json:"website"`
+	JwtToken      string    `sql:"-" json:"jwtToken"`
+	UserType      UserType  `json:"userType" sql:"type:ENUM('buyer','seller');DEFAULT:null"`
+	EmailVerified bool      `sql:"not null;DEFAULT:false" json:"emailVerified"`
+	Secret        string    `json:"-"`
+	Products      []Product `json:"products"`
 }
 
 func (user *User) TableName() string {
@@ -46,10 +66,6 @@ func (user *User) Validate() *utils.Error {
 	if !strings.Contains(user.Email, "@") {
 		return utils.NewError(utils.EINVALID, "email address is required", nil)
 	}
-
-	//if len(user.Password) < 6 {
-	//	return utils.NewError(utils.EINVALID, "password is required", nil)
-	//}
 
 	temp := &User{}
 
@@ -68,13 +84,9 @@ func (user *User) Validate() *utils.Error {
 }
 
 func (user *User) Create() (*User, *utils.Error) {
-	//hashedPassword := hashAndSalt([]byte(user.Password))
-	//user.Password = string(hashedPassword)
-
-	user.Password = ""
-
 	err := GetDB().Create(user).Error
 	if err != nil {
+		log.Error(err)
 		return &User{}, utils.NewError(utils.ECONFLICT, "DB error: could not create user", nil)
 	}
 
@@ -86,8 +98,6 @@ func (user *User) Create() (*User, *utils.Error) {
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
 	tokenString, _ := token.SignedString([]byte(cfg.JWTSecret))
 	user.JwtToken = tokenString //Store the token in the response
-
-	user.Password = "" //remove password
 
 	return user, nil
 }
@@ -105,7 +115,7 @@ func ValidateUserInfo(id string, user *User) *utils.Error {
 		return utils.NewError(utils.EINVALID, "DB error: user record not found", err)
 	}
 
-	log.Println(temp.Email != user.Email)
+	//log.Println(temp.Email != user.Email)
 
 	if user.Email != "" && temp.Email != user.Email {
 		tempUserEmail := &User{}
@@ -135,41 +145,10 @@ func Update(id string, user *User) (*User, *utils.Error) {
 
 	err = GetDB().Model(&updateUser).Updates(&user).Error
 	if err != nil {
-		return &User{}, utils.NewError(utils.ECONFLICT, "DB error: could not create user", nil)
+		return &User{}, utils.NewError(utils.ECONFLICT, "DB error: could not update user", nil)
 	}
 
 	return updateUser, nil
-}
-
-func (user *User) UpdatePassword(oldPassword string, newPassword string) *utils.Error {
-
-	newPasswordHashed := hashAndSalt([]byte(newPassword))
-
-	fmt.Println(newPassword)
-	fmt.Println(user.Password)
-
-	if comparePasswords(user.Password, []byte(oldPassword)) == false { //Password does not match!
-		return utils.NewError(utils.EINVALID, "Incorrect current password", nil)
-	}
-
-	if len(newPassword) < 6 {
-		return utils.NewError(utils.EINVALID, "Password is required", nil)
-	}
-
-	user.Password = string(newPasswordHashed)
-
-	//Create JWT token
-	tk := &Token{UserId: user.ID}
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
-	tokenString, _ := token.SignedString([]byte(cfg.JWTSecret))
-	user.JwtToken = tokenString //Store the token in the response
-
-	err := GetDB().Save(&user).Updates(&user).Error
-	if err != nil {
-		return utils.NewError(utils.ECONFLICT, "DB error: could not update password", nil)
-	}
-
-	return nil
 }
 
 func Login(email string) (*User, *utils.Error) {
@@ -178,18 +157,11 @@ func Login(email string) (*User, *utils.Error) {
 	err := GetDB().Table("users").Where("email = ?", email).First(user).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return &User{}, utils.NewError(utils.ENOTFOUND, "Your email or password is incorrect.", nil)
+			return &User{}, utils.NewError(utils.ENOTFOUND, "DB error: user record not found", nil)
 		}
 
 		return &User{}, utils.NewError(utils.EINTERNAL, "internal server error", nil)
 	}
-
-	//if comparePasswords(user.Password, []byte(password)) == false { //Password does not match!
-	//	return &User{}, utils.NewError(utils.EINVALID, "Your email or password is incorrect.", nil)
-	//}
-
-	//Worked! Logged In
-	user.Password = ""
 
 	//Create JWT token
 	tk := &Token{
@@ -225,9 +197,9 @@ func QueryUsers(userID string, query string) (*[]User, *utils.Error) {
 	fmt.Println(len(idStr))
 
 	if len(idStr) <= 0 {
-		err = GetDB().Table("users").Where("full_name LIKE ?", query+"%").Find(&users).Error
+		err = GetDB().Table("users").Where("name LIKE ?", query+"%").Find(&users).Error
 	} else {
-		err = GetDB().Table("users").Where("id NOT IN ("+idStr+") AND full_name LIKE ?", query+"%").Find(&users).Error
+		err = GetDB().Table("users").Where("id NOT IN ("+idStr+") AND name LIKE ?", query+"%").Find(&users).Error
 	}
 
 	if err != nil {
@@ -271,32 +243,4 @@ func FindUserByEmail(email string) (*User, error) {
 	}
 
 	return user, err
-}
-
-func hashAndSalt(pwd []byte) string {
-
-	// Use GenerateFromPassword to hash & salt pwd
-	// MinCost is just an integer constant provided by the bcrypt
-	// package along with DefaultCost & MaxCost.
-	// The cost can be any value you want provided it isn't lower
-	// than the MinCost (4)
-	hash, err := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
-	if err != nil {
-		log.Println(err)
-	}
-	// GenerateFromPassword returns a byte slice so we need to
-	// convert the bytes to a string and return it
-	return string(hash)
-}
-func comparePasswords(hashedPwd string, plainPwd []byte) bool {
-	// Since we'll be getting the hashed password from the DB it
-	// will be a string so we'll need to convert it to a byte slice
-	byteHash := []byte(hashedPwd)
-	err := bcrypt.CompareHashAndPassword(byteHash, plainPwd)
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-
-	return true
 }

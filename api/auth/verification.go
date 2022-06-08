@@ -6,6 +6,7 @@ import (
 	"github.com/mailgun/mailgun-go/v4"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	log "github.com/sirupsen/logrus"
 	"kilimanjaro-api/config"
 	"kilimanjaro-api/database/models"
 	"kilimanjaro-api/utils"
@@ -44,6 +45,7 @@ func CreateCode(user *models.User) (string, error) {
 
 	user.Secret = key.Secret()
 	if dbErr := models.GetDB().Save(&user).Error; dbErr != nil {
+		log.Error(dbErr)
 		return "", utils.NewError(utils.ECONFLICT, "could not save user", nil)
 	}
 

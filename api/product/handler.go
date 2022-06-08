@@ -3,29 +3,38 @@ package product
 import (
 	"encoding/json"
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 	"kilimanjaro-api/database/models"
 	u "kilimanjaro-api/utils"
 	"kilimanjaro-api/utils/response"
-	"log"
+
 	"net/http"
 )
 
 var CreateProduct = func(w http.ResponseWriter, r *http.Request) {
+	token := r.Context().Value("token").(*models.Token)
+	logger := r.Context().Value("logger").(*log.Entry)
+
+	user, _ := models.FindUserById(token.UserId)
+
 	product := &models.Product{}
-	err := json.NewDecoder(r.Body).Decode(product) //decode the request body into struct and failed if any error occur
-	if err != nil {
-		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", err))
+	product.VendorID = user.ID
+
+	jsonErr := json.NewDecoder(r.Body).Decode(product) //decode the request body into struct and failed if any error occur
+	if jsonErr != nil {
+		logger.Errorln(jsonErr.Error())
+
+		response.HandleError(w, u.NewError(u.EINTERNAL, "Invalid request", jsonErr))
 		return
 	}
 
-	log.Println("TEST")
-
-	vendor, _ := models.FindVendorById(product.VendorID)
-
 	data, productErr := product.Create()
-	data.Vendor = vendor
+
+	data.Vendor = user
 
 	if productErr != nil {
+		logger.Errorln(productErr.Error())
+
 		response.HandleError(w, u.NewError(u.EINTERNAL, "Internal server err", productErr))
 		return
 	}
@@ -39,7 +48,6 @@ var GetProduct = func(w http.ResponseWriter, r *http.Request) {
 	//token := r.Context().Value("token").(*Token)
 	params := mux.Vars(r)
 	podId := params["id"]
-	log.Println(podId)
 	podcast, err := models.FindProductById(podId)
 	if err != nil {
 		response.HandleError(w, err)
@@ -54,7 +62,8 @@ var GetProduct = func(w http.ResponseWriter, r *http.Request) {
 
 var GetAllProducts = func(w http.ResponseWriter, r *http.Request) {
 
-	//token := r.Context().Value("token").(*auth.Token)
+	logger := r.Context().Value("logger").(*log.Entry)
+	logger.Warn("GET ALL PRODUCTS")
 	//user := auth.GetUser(token.UserId)
 
 	products, err := models.FindAllProducts()

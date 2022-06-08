@@ -14,7 +14,7 @@ func GetDB() *gorm.DB {
 type Vendor struct {
 	orm.GormModel
 	Title       string    `json:"title"`
-	Description string    `sql:"type:longtext"`
+	Description string    `sql:"type:longtext" json:"description"`
 	Email       string    `json:"email"`
 	Phone       string    `json:"phone"`
 	Image       string    `json:"image"`

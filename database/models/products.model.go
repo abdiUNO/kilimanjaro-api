@@ -19,15 +19,46 @@ type Product struct {
 	orm.GormModel
 	Title       string          `json:"title"`
 	Description string          `sql:"type:longtext" json:"description"`
-	Category    string          `json:"category"`
+	Category    Category        `json:"category"`
+	CategoryId  string          `json:"categoryId"`
 	Price       decimal.Decimal `json:"price" gorm:"type:numeric"`
-	Image       string          `json:"image"`
-	Vendor      *Vendor         `json:"vendor"`
+	ImageOne    string          `json:"imageOne"`
+	ImageTwo    string          `json:"imageTwo"`
+	ImageThree  string          `json:"imageThree"`
+	Images      []string        `json:"images" gorm:"-"`
+	Vendor      *User           `json:"vendor"`
 	VendorID    string          `json:"vendorId"`
+}
+
+func (product *Product) AfterFind(tx *gorm.DB) (err error) {
+	if product.ImageOne != "" {
+		product.Images = append(product.Images, product.ImageOne)
+	}
+	if product.ImageTwo != "" {
+		product.Images = append(product.Images, product.ImageTwo)
+	}
+	if product.ImageThree != "" {
+		product.Images = append(product.Images, product.ImageThree)
+	}
+
+	return
 }
 
 func (product *Product) Create() (*Product, *utils.Error) {
 	err := GetDB().Create(&product).Error
+
+	if product.ImageOne != "" {
+		product.Images = append(product.Images, product.ImageOne)
+	}
+	if product.ImageTwo != "" {
+		product.Images = append(product.Images, product.ImageTwo)
+	}
+	if product.ImageThree != "" {
+		product.Images = append(product.Images, product.ImageThree)
+	}
+
+	category, _ := FindCategoryById(product.CategoryId)
+	product.Category = *category
 
 	if err != nil {
 		log.Println("RRRR")
@@ -39,7 +70,7 @@ func (product *Product) Create() (*Product, *utils.Error) {
 
 func FindProductById(productId string) (*Product, *utils.Error) {
 	product := &Product{}
-	err := GetDB().First(&product, "id = ?", productId).Error
+	err := GetDB().Table("Products").Preload("Categories").Where("id = ?", productId).Find(&product).Error
 
 	if err != nil {
 		log.Println(err)
@@ -57,11 +88,23 @@ func FindProductById(productId string) (*Product, *utils.Error) {
 	return product, nil
 }
 
+func FindProductsByVendor(userId string) (*[]Product, *utils.Error) {
+	product := &[]Product{}
+	err := GetDB().Table("products").Preload("Vendor").Preload("Category").Find(&product, "vendor_id = ?", userId).Error
+
+	if err != nil {
+		log.Println(err)
+		return product, utils.NewError(utils.EINTERNAL, "internal database error", err)
+	}
+
+	return product, nil
+}
+
 func FindAllProducts() (*[]Product, *utils.Error) {
 
 	products := &[]Product{}
 
-	if err := GetDB().Limit(10).Table("products").Preload("Vendor").Find(&products).Error; err != nil {
+	if err := GetDB().Table("products").Preload("Vendor").Preload("Category").Order("created_at desc").Find(&products).Error; err != nil {
 		log.Println(err)
 		return products, utils.NewError(utils.EINTERNAL, "internal database error", err)
 	}
